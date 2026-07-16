@@ -487,7 +487,7 @@ export default {
         }
       } else {
         // Normal mode: position-based spawning + triggers
-        enemySpawner.update(camera.x, player.value.x);
+        enemySpawner.update();
 
         spawnTriggers.forEach((trigger) => {
           if (trigger.checkTrigger(player.value)) {

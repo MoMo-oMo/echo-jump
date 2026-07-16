@@ -20,7 +20,7 @@ export class EnemySpawner {
   }
 
   // All enemies are pre-spawned; just cull dead ones each frame
-  update(_cameraX, _playerX) {
+  update() {
     this.enemies = this.enemies.filter((e) => e.active);
   }
 
