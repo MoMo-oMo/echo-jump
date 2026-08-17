@@ -97,12 +97,15 @@
       @close="showSettings = false"
       @settings-changed="handleSettingsChanged"
     />
+
+    <WelcomeTour />
   </div>
 </template>
 
 <script>
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import GameSettingsPanel from "./GameSettingsPanel.vue";
+import WelcomeTour from "./WelcomeTour.vue";
 import { cloneDefaultGameSettings } from "../game/settingsDefaults";
 import { SoundManager } from "../game/SoundManager";
 
@@ -110,6 +113,7 @@ export default {
   name: "MainMenu",
   components: {
     GameSettingsPanel,
+    WelcomeTour,
   },
   props: {
     hasSave: Boolean,
