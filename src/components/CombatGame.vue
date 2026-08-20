@@ -1,8 +1,13 @@
 <template>
-  <v-container class="game-container" fluid>
+  <v-container class="game-container" :class="{ 'game-container--mobile': isMobile }" fluid>
     <!-- Canvas + Crosshair — always mounted (initGame() grabs its 2D
-         context on mount), the rotate prompt below just covers it. -->
-    <div class="canvas-wrapper">
+         context on mount), the rotate prompt below just covers it.
+         Sized directly from the same px values handleResize() already
+         computes for the canvas's drawing buffer, rather than keeping a
+         second, separately-computed CSS size that can drift out of sync
+         with it (and did — see the aspect-ratio fix note in the style
+         block below). -->
+    <div class="canvas-wrapper" :style="{ width: canvasWidth + 'px', height: canvasHeight + 'px' }">
       <canvas
         ref="gameCanvas"
         :width="canvasWidth"
@@ -1134,22 +1139,35 @@ export default {
 
 <style scoped>
 .game-container {
-  position: relative;
+  /* Fixed + inset:0 instead of min-height:100vh — vh includes the space
+     hidden behind a mobile browser's address bar, so the layout thinks it
+     has more room than is actually visible and pushes content off-screen.
+     Fixed positioning tracks the real visible viewport instead. */
+  position: fixed;
+  inset: 0;
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;
   background: linear-gradient(135deg, #0a0a0f 0%, #1a0033 100%);
   padding: 20px;
   overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Matches handleResize()'s mobile margin (12px total) — these two values
+   drifting apart is exactly what caused the canvas to overflow its own
+   padded area on mobile before. */
+.game-container--mobile {
+  padding: 6px;
 }
 
 .canvas-wrapper {
+  /* Width/height come from the inline :style binding (see template) —
+     both the CSS box and the canvas's own drawing-buffer resolution are
+     driven by the same handleResize() calculation now, so they can't
+     drift apart into a non-2:1 box that stretch-distorts the canvas. */
   position: relative;
   display: inline-block;
-  width: min(100vw - 40px, 1200px);
-  max-height: calc(100vh - 40px);
-  aspect-ratio: 2 / 1;
 }
 
 .rotate-prompt {
