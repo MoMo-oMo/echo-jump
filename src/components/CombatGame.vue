@@ -1,6 +1,7 @@
 <template>
   <v-container class="game-container" fluid>
-    <!-- Canvas + Crosshair -->
+    <!-- Canvas + Crosshair — always mounted (initGame() grabs its 2D
+         context on mount), the rotate prompt below just covers it. -->
     <div class="canvas-wrapper">
       <canvas
         ref="gameCanvas"
@@ -17,11 +18,28 @@
         class="crosshair"
         :style="{ left: mouseCanvasX + 'px', top: mouseCanvasY + 'px' }"
       ></div>
+
+      <!-- Touch controls (mobile only) — overlaid on the canvas rather
+           than stacked below it; landscape phones are too short on
+           vertical space to spare a whole separate control bar. -->
+      <TouchControls
+        v-if="isMobile && !isPaused && !showUpgradeMenu && !isPortrait"
+        @press="handleTouchPress"
+        @pause="togglePause"
+      />
     </div>
 
-    <!-- HUD (hidden during challenge-over overlay) -->
+    <!-- Mobile + portrait: ask for landscape instead of squeezing the level
+         view into a narrow strip — this is a side-scroller, it needs width.
+         Overlays the canvas rather than replacing it (see note above). -->
+    <div v-if="isMobile && isPortrait" class="rotate-prompt">
+      <div class="rotate-icon">⟲</div>
+      <p>Rotate your device to landscape to play</p>
+    </div>
+
+    <!-- HUD (hidden during challenge-over overlay, and behind the rotate prompt) -->
     <GameHUD
-      v-if="!isPaused && !showUpgradeMenu && !challengeOver"
+      v-if="!isPaused && !showUpgradeMenu && !challengeOver && !(isMobile && isPortrait)"
       :player="player"
       :kills="kills"
       :deaths="deaths"
@@ -194,10 +212,11 @@ import { createEndingFlag } from "../game/EndingFlag";
 import { WaveManager } from "../game/WaveManager";
 import GameHUD from "./GameHUD.vue";
 import PauseMenu from "./PauseMenu.vue";
+import TouchControls from "./TouchControls.vue";
 
 export default {
   name: "CombatGame",
-  components: { GameHUD, PauseMenu },
+  components: { GameHUD, PauseMenu, TouchControls },
   props: {
     challengeMode: Boolean,
     continueGame: Boolean,
@@ -276,6 +295,18 @@ export default {
     const mouseOver = ref(false);
     const mouseCanvasX = ref(0);
     const mouseCanvasY = ref(0);
+
+    // Touch-capable device — drives the on-screen controls and mobile-aim
+    // fallback instead of keyboard + mouse-aim.
+    const isMobile = ref(
+      typeof window !== "undefined" &&
+        ("ontouchstart" in window || navigator.maxTouchPoints > 0)
+    );
+    // Portrait phones don't have the width for a side-scroller — shown a
+    // rotate prompt instead of squeezing the view down when this is true.
+    const isPortrait = ref(
+      typeof window !== "undefined" && window.innerHeight > window.innerWidth
+    );
 
     // Watch for continueGame prop to hot-load save while in-game
     watch(
@@ -391,14 +422,28 @@ export default {
 
     const gameLoop = () => {
       update();
-      if (!isPaused.value) render();
+      if (!isPaused.value && !(isMobile.value && isPortrait.value)) render();
       animationFrameId = requestAnimationFrame(gameLoop);
     };
 
     // ─── Update ────────────────────────────────────────────────────────────────
 
     const update = () => {
+      // Freeze the simulation behind the rotate prompt — otherwise enemies
+      // keep attacking a player the phone owner can't see or control.
+      if (isMobile.value && isPortrait.value) return;
+
       input.updateJustPressed();
+
+      // No mouse on touch devices to aim with, so aim (and the gun-barrel
+      // visual, which reads the same mouseCanvas values) follows whichever
+      // way the player is currently facing instead.
+      if (isMobile.value && player.value) {
+        const px = player.value.x - camera.x + player.value.width / 2;
+        const py = player.value.y - camera.y + player.value.height / 2;
+        mouseCanvasX.value = px + player.value.facingDirection * 60;
+        mouseCanvasY.value = py;
+      }
 
       if (input.justPressed.escape) togglePause();
 
@@ -996,6 +1041,7 @@ export default {
 
     onMounted(() => {
       window.addEventListener("resize", handleResize);
+      window.addEventListener("orientationchange", handleResize);
       initGame();
       handleResize();
     });
@@ -1005,11 +1051,37 @@ export default {
       if (input) input.destroy();
       if (soundManager) soundManager.destroy();
       window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
     });
 
+    function handleTouchPress(key, isDown) {
+      if (input) input.keys[key] = isDown;
+    }
+
     function handleResize() {
-      const width = Math.min(window.innerWidth - 40, 1200);
-      const height = Math.min(window.innerHeight - 40, 600);
+      isMobile.value =
+        "ontouchstart" in window || navigator.maxTouchPoints > 0;
+      isPortrait.value = window.innerHeight > window.innerWidth;
+
+      // Touch controls are overlaid on the canvas (see template), not a
+      // separate bar, so they don't need their own reserved space here.
+      const margin = isMobile.value ? 12 : 40;
+
+      const availableWidth = window.innerWidth - margin;
+      const availableHeight = window.innerHeight - margin;
+
+      // Keep the game's native 1200:600 (2:1) view — letterbox instead of
+      // stretching it into whatever the screen's aspect ratio happens to be.
+      const aspectRatio = 1200 / 600;
+      let width = Math.min(availableWidth, 1200);
+      let height = width / aspectRatio;
+      if (height > availableHeight) {
+        height = availableHeight;
+        width = height * aspectRatio;
+      }
+      width = Math.max(1, Math.round(width));
+      height = Math.max(1, Math.round(height));
+
       canvasWidth.value = width;
       canvasHeight.value = height;
       if (camera) {
@@ -1026,6 +1098,9 @@ export default {
       mouseOver,
       mouseCanvasX,
       mouseCanvasY,
+      isMobile,
+      isPortrait,
+      handleTouchPress,
       player,
       isPaused,
       showUpgradeMenu,
@@ -1075,6 +1150,34 @@ export default {
   width: min(100vw - 40px, 1200px);
   max-height: calc(100vh - 40px);
   aspect-ratio: 2 / 1;
+}
+
+.rotate-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(5, 5, 8, 0.96);
+  color: #00ffff;
+  text-align: center;
+  padding: 24px;
+}
+.rotate-icon {
+  font-size: 3rem;
+  animation: rotate-hint 1.6s ease-in-out infinite;
+}
+.rotate-prompt p {
+  font-size: 1rem;
+  color: #cdeeee;
+  max-width: 260px;
+}
+@keyframes rotate-hint {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-90deg); }
 }
 
 .game-canvas {
