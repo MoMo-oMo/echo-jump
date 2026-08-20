@@ -27,11 +27,12 @@
 </template>
 
 <script>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import CombatGame from "./components/CombatGame.vue";
 import MainMenu from "./components/MainMenu.vue";
 import { SaveManager } from "./game/SaveManager";
 import { cloneDefaultGameSettings } from "./game/settingsDefaults";
+import { useFullscreen } from "./composables/useFullscreen";
 
 export default {
   name: "App",
@@ -50,6 +51,28 @@ export default {
     const settings = ref({
       ...cloneDefaultGameSettings(),
       ...saveManager.loadSettings(),
+    });
+
+    const fullscreen = useFullscreen();
+
+    // Mobile: rotating to landscape auto-fullscreens (best-effort — browsers
+    // may block requestFullscreen() here since orientationchange isn't a
+    // user gesture; the manual buttons in MainMenu/PauseMenu cover that
+    // case). Rotating back to portrait exits again, since portrait just
+    // shows a "rotate your device" prompt with nothing to view fullscreen.
+    function handleOrientationChange() {
+      const isTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+      if (!isTouch) return;
+      const isLandscape = window.innerWidth > window.innerHeight;
+      if (isLandscape) fullscreen.enter();
+      else fullscreen.exit();
+    }
+
+    window.addEventListener("resize", handleOrientationChange);
+    window.addEventListener("orientationchange", handleOrientationChange);
+    onUnmounted(() => {
+      window.removeEventListener("resize", handleOrientationChange);
+      window.removeEventListener("orientationchange", handleOrientationChange);
     });
 
     function refreshMenuProgress() {
@@ -73,6 +96,7 @@ export default {
       hasSave.value = saveManager.hasCheckpoint();
       refreshMenuProgress();
       challengeStats.value = saveManager.loadChallengeStats();
+      handleOrientationChange();
     });
 
     function startNewGame() {

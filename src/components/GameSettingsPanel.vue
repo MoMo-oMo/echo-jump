@@ -27,7 +27,7 @@
         <span>{{ sfxVolumePercent }}%</span>
       </div>
 
-      <div v-if="showFullscreen" class="setting-item">
+      <div v-if="showFullscreen && fullscreenSupported" class="setting-item">
         <label>Fullscreen</label>
         <button @click="toggleFullscreen" class="toggle-btn">
           {{ isFullscreen ? "ON" : "OFF" }}
@@ -40,8 +40,9 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { computed } from "vue";
 import { cloneDefaultGameSettings, DEFAULT_GAME_SETTINGS } from "../game/settingsDefaults";
+import { useFullscreen } from "../composables/useFullscreen";
 
 export default {
   name: "GameSettingsPanel",
@@ -65,40 +66,22 @@ export default {
     );
 
     // Track actual browser fullscreen state (not just the setting value)
-    const isFullscreen = ref(!!document.fullscreenElement);
-
-    function onFullscreenChange() {
-      isFullscreen.value = !!document.fullscreenElement;
-      emit("settings-changed", {
-        ...DEFAULT_GAME_SETTINGS,
-        ...props.settings,
-        fullscreen: isFullscreen.value,
-      });
-    }
-
-    onMounted(() => {
-      document.addEventListener("fullscreenchange", onFullscreenChange);
-    });
-    onUnmounted(() => {
-      document.removeEventListener("fullscreenchange", onFullscreenChange);
-    });
+    const { isFullscreen, isSupported: fullscreenSupported, toggle } = useFullscreen();
 
     function emitPatch(patch) {
       emit("settings-changed", { ...DEFAULT_GAME_SETTINGS, ...props.settings, ...patch });
     }
 
-    function toggleFullscreen() {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      } else {
-        document.exitFullscreen().catch(() => {});
-      }
+    async function toggleFullscreen() {
+      await toggle();
+      emitPatch({ fullscreen: isFullscreen.value });
     }
 
     return {
       musicVolumePercent,
       sfxVolumePercent,
       isFullscreen,
+      fullscreenSupported,
       updateMusicVolume: (e) => emitPatch({ musicVolume: Number(e.target.value) / 100 }),
       updateSFXVolume:   (e) => emitPatch({ sfxVolume:   Number(e.target.value) / 100 }),
       toggleFullscreen,

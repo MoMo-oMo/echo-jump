@@ -29,6 +29,7 @@
     <GameSettingsPanel
       v-if="showSettings"
       :settings="settings"
+      :show-fullscreen="true"
       @close="showSettings = false"
       @settings-changed="handleSettingsChanged"
     />
