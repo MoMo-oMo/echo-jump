@@ -18,6 +18,7 @@ export class CombatPlayer extends Player {
     // Shooting
     this.ammo = 30;
     this.maxAmmo = 30;
+    this.maxReserveAmmo = 120;
     this.reserveAmmo = 120; // Reserve ammo pool
     this.shootCooldown = 0;
     this.shootDelay = 10; // frames between shots
@@ -143,9 +144,10 @@ export class CombatPlayer extends Player {
     this.coins += amount;
   }
 
-  // Add ammo to reserve
+  // Add ammo to reserve — pickups top the reserve up but shouldn't stack
+  // past its cap, since the player already starts (and respawns) full.
   addAmmo(amount) {
-    this.reserveAmmo += amount;
+    this.reserveAmmo = Math.min(this.maxReserveAmmo, this.reserveAmmo + amount);
   }
 
   // Reload from reserve ammo; returns true if reloaded

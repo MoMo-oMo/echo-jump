@@ -195,7 +195,7 @@
 <script>
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { CombatPlayer } from "../game/PlayerCombat";
-import { generateLevel, generateSeed } from "../game/LevelGenerator";
+import { generateLevel, generateSeed, GROUND_Y, PLATFORM_HEIGHT } from "../game/LevelGenerator";
 import { createChallengeArena, createArenaUpgradeStation } from "../game/ChallengeArena";
 import { createCollectibles } from "../game/Collectible";
 import { Camera } from "../game/Camera";
@@ -735,8 +735,13 @@ export default {
           }
         });
 
-        // Fall death (normal mode only — arena has a floor)
-        if (!props.challengeMode && player.value.y > canvasHeight.value + 100) {
+        // Fall death (normal mode only — arena has a floor). Threshold is
+        // relative to the level's world-space ground y (GROUND_Y), not the
+        // on-screen canvas height — canvasHeight now varies with viewport
+        // size (mobile landscape can be under 300px tall), and comparing
+        // against it made the player "fall out of the level" the instant
+        // they landed on solid ground on any short screen.
+        if (!props.challengeMode && player.value.y > GROUND_Y + 150) {
           handlePlayerDeath();
         }
       }
@@ -1112,6 +1117,13 @@ export default {
       if (camera) {
         camera.resize(width, height);
         if (levelLength.value > 0) camera.setLevelLength(levelLength.value);
+        // Pin the ground to the bottom of the view instead of leaving
+        // camera.y at 0. The desktop canvas was always exactly 600 tall,
+        // so a fixed y=0 happened to keep the ground (which sits at
+        // GROUND_Y..GROUND_Y+PLATFORM_HEIGHT = 550..600) just inside frame.
+        // On a shorter mobile canvas that same fixed y=0 pushes the ground
+        // — and the player standing on it — entirely below the visible area.
+        camera.y = Math.max(0, GROUND_Y + PLATFORM_HEIGHT - height);
       }
       if (background) background.resize(width, height);
     }

@@ -5,8 +5,10 @@
 
 import { Platform } from "./Platform";
 
-const G = 550; // ground surface y (matches ChallengeArena/EndingFlag/HUD assumptions)
-const H = 50; // platform height
+export const GROUND_Y = 550; // ground surface y (matches ChallengeArena/EndingFlag/HUD assumptions)
+export const PLATFORM_HEIGHT = 50;
+const G = GROUND_Y;
+const H = PLATFORM_HEIGHT;
 const SAFE_ZONE = 350; // no hazards/enemies before this x, matches old level's tutorial buffer
 
 // ─── Seeded PRNG (mulberry32) ───────────────────────────────────────────────
