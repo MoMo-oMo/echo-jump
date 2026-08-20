@@ -1,5 +1,7 @@
 <template>
   <v-container class="game-container" :class="{ 'game-container--mobile': isMobile }" fluid>
+    <div v-if="gameLoopError" class="game-loop-error">{{ gameLoopError }}</div>
+
     <!-- Canvas + Crosshair — always mounted (initGame() grabs its 2D
          context on mount), the rotate prompt below just covers it.
          Sized directly from the same px values handleResize() already
@@ -301,6 +303,11 @@ export default {
     const mouseCanvasX = ref(0);
     const mouseCanvasY = ref(0);
 
+    // If update()/render() throw, this surfaces the message on-screen (not
+    // every device has easy access to a console) instead of the loop just
+    // dying silently and leaving a blank canvas forever.
+    const gameLoopError = ref("");
+
     // Touch-capable device — drives the on-screen controls and mobile-aim
     // fallback instead of keyboard + mouse-aim.
     const isMobile = ref(
@@ -367,7 +374,10 @@ export default {
     // ─── Init ──────────────────────────────────────────────────────────────────
 
     function initGame() {
-      ctx = gameCanvas.value.getContext("2d", { alpha: false, desynchronized: true });
+      // desynchronized:true is a latency hint that's had rendering glitches
+      // on some Android GPU/browser combos (blank/stale canvas) — not worth
+      // it for a hint we don't have a measured need for.
+      ctx = gameCanvas.value.getContext("2d", { alpha: false });
 
       saveManager = new SaveManager();
       soundManager = new SoundManager();
@@ -426,8 +436,18 @@ export default {
     // ─── Game loop ─────────────────────────────────────────────────────────────
 
     const gameLoop = () => {
-      update();
-      if (!isPaused.value && !(isMobile.value && isPortrait.value)) render();
+      try {
+        update();
+        if (!isPaused.value && !(isMobile.value && isPortrait.value)) render();
+      } catch (err) {
+        // A throw here used to kill the loop outright — requestAnimationFrame
+        // never got scheduled again, so the canvas just froze on whatever it
+        // last drew (often blank, first frame). Catching it means a single
+        // bad frame can't take the whole game down, and the message is
+        // visible on-screen for devices without easy console access.
+        console.error("[gameLoop]", err);
+        gameLoopError.value = `${err.name}: ${err.message}`;
+      }
       animationFrameId = requestAnimationFrame(gameLoop);
     };
 
@@ -1105,6 +1125,7 @@ export default {
       mouseCanvasY,
       isMobile,
       isPortrait,
+      gameLoopError,
       handleTouchPress,
       player,
       isPaused,
@@ -1168,6 +1189,21 @@ export default {
      drift apart into a non-2:1 box that stretch-distorts the canvas. */
   position: relative;
   display: inline-block;
+}
+
+.game-loop-error {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 999;
+  background: #ff2f4d;
+  color: #fff;
+  font-family: monospace;
+  font-size: 0.75rem;
+  padding: 8px 12px;
+  text-align: center;
+  word-break: break-word;
 }
 
 .rotate-prompt {
